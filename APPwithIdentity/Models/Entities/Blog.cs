@@ -1,5 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using APPwithIdentity.Data;
 
 namespace APPwithIdentity.Models.Entities
@@ -8,13 +8,13 @@ namespace APPwithIdentity.Models.Entities
     {
         public int Id { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "The Header field is required.")]
         public string Header { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "The Text field is required.")]
         public string Text { get; set; }
 
-        public string Image { get; set; }
+        public string? Image { get; set; }
 
         [ForeignKey("ApplicationUser")]
         public string UserId { get; set; }

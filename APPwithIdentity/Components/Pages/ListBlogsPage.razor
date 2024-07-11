@@ -1,0 +1,52 @@
+﻿@page "/blogs"
+
+@using APPwithIdentity.Service
+@using APPwithIdentity.Models.Entities
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+
+@inject IService blogService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h3>All Blogs</h3>
+
+@if (blogs == null)
+{
+    <p>Loading...</p>
+}
+else if (blogs.Count == 0)
+{
+    <p>No blogs found.</p>
+}
+else
+{
+    <ul>
+        @foreach (var blog in blogs)
+        {
+            <li>
+                <strong>@blog.Header</strong>
+                <p>@blog.Text</p>
+                <p>Created by: @blog.ApplicationUser.UserName</p>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    List<Blog> blogs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        try
+        {
+            blogs = await blogService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading blogs: {ex.Message}");
+        }
+    }
+}

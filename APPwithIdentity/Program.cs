@@ -1,6 +1,7 @@
 using APPwithIdentity.Components;
 using APPwithIdentity.Components.Account;
 using APPwithIdentity.Data;
+using APPwithIdentity.Service;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,8 @@ namespace APPwithIdentity
             builder.Services.AddScoped<IdentityUserAccessor>();
             builder.Services.AddScoped<IdentityRedirectManager>();
             builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+
+            builder.Services.AddScoped<IService, BlogService>(); // Ensure BlogService is registered
 
             builder.Services.AddAuthentication(options =>
                 {
