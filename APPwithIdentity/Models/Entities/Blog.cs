@@ -6,6 +6,7 @@ namespace APPwithIdentity.Models.Entities
 {
     public class Blog
     {
+        [Key]
         public int Id { get; set; }
 
         [Required(ErrorMessage = "The Header field is required.")]

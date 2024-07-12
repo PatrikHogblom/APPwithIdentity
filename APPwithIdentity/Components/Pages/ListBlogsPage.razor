@@ -4,9 +4,14 @@
 @using APPwithIdentity.Models.Entities
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using APPwithIdentity.Data
+@inject UserManager<ApplicationUser> userManager
 
 @inject IService blogService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+
+@rendermode InteractiveServer
 
 <h3>All Blogs</h3>
 
@@ -20,33 +25,254 @@ else if (blogs.Count == 0)
 }
 else
 {
-    <ul>
+    <div class="row">
         @foreach (var blog in blogs)
         {
-            <li>
-                <strong>@blog.Header</strong>
-                <p>@blog.Text</p>
-                <p>Created by: @blog.ApplicationUser.UserName</p>
-            </li>
+            <div class="card m-2" style="width: 18rem">
+                @if (!string.IsNullOrEmpty(blog.Image))
+                {
+                    <img class="card-img-top" src="/images/@blog.Image" alt="Blog Image">
+                }
+                <div class="card-body">
+                    <h5 class="card-title">@blog.Header</h5>
+                    <p class="card-text">@blog.Text</p>
+                   <AuthorizeView>
+                        @if (blog.UserId == currentUserId && isUpdateMode == false)
+                        {
+                            <button class="btn btn-warning mr-2" @onclick="() => UpdateBlog(blog)">Update</button>
+                            <button class="btn btn-danger" @onclick="() => DeleteBlog(blog.Id)">Delete</button>
+                        }
+                   </AuthorizeView>
+                </div>
+                <p class="card-footer">Sender: @blog.ApplicationUser.UserName</p>
+            </div>
         }
-    </ul>
+    </div>
 }
+
+
+@if (isUpdateMode == false)
+{
+    <div class="card">
+    <AuthorizeView Context="authContext">
+        <h4>Create Blog</h4>
+        <div class="card-body">
+            <EditForm Model="@newBlog" OnValidSubmit="CreateBlog" FormName="createForm" Context="formContext">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <label class="form-label">Header</label>
+                <InputText id="header" class="form-control" @bind-Value="newBlog.Header" />
+
+                <label class="form-label">Text</label>
+                <InputText id="text" class="form-control" @bind-Value="newBlog.Text" />
+
+                <label class="form-label">Image</label>
+                <InputFile class="form-control" OnChange="HandleFileSelected" />
+
+                <button type="submit" class="btn btn-success mt-1">Create Blog</button>
+
+            </EditForm>
+        </div>
+    </AuthorizeView>
+    </div>
+}
+else
+{
+    <h4>Update Blog</h4>
+    <div class="card">
+        <div class="card-body">
+            <EditForm Model="@updateBlog" OnValidSubmit="UpdateSelectedBlog">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <label class="form-label">Header</label>
+                <InputText id="header" class="form-control" @bind-Value="updateBlog.Header" />
+
+                <label class="form-label">Text</label>
+                <InputText id="text" class="form-control" @bind-Value="updateBlog.Text" />
+
+                <label class="form-label">Image</label>
+                <InputFile class="form-control" OnChange="HandleFileSelected" />
+
+                <button type="submit" class="btn btn-success">Update</button>
+                <button type="button" class="btn btn-secondary ml-2" @onclick="CancelUpdate">Cancel</button>
+            </EditForm>
+        </div>
+    </div>
+}
+
 
 @code {
     List<Blog> blogs;
+    Blog updateBlog;
+    Blog newBlog = new Blog();
+    private IBrowserFile uploadedFile;
+    private bool isUpdateMode = false;
+    private string currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
+        currentUserId = userManager.GetUserId(user);
+
 
         try
         {
-            blogs = await blogService.GetAllAsync();
+            await LoadBlogs();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading blogs: {ex.Message}");
         }
     }
+
+    private async Task LoadBlogs()
+    {
+        try
+        {
+            blogs = await blogService.GetAllAsync();
+            StateHasChanged(); // Update the UI
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading blogs: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteBlog(int blogId)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        try
+        {
+
+
+            await blogService.DeleteAsync(blogId, user);
+            await LoadBlogs(); // Reload the blogs list after deletion
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting blog: {ex.Message}");
+        }
+    }
+
+    private void UpdateBlog(Blog blog)
+    {
+        // Clone the selected blog to avoid modifying the original until update
+        isUpdateMode = true;
+        updateBlog = new Blog
+            {
+                Id = blog.Id,
+                Header = blog.Header,
+                Text = blog.Text,
+                Image = blog.Image,
+                UserId = blog.UserId // Ensure UserId is set appropriately
+            };
+    }
+
+    private async Task UpdateSelectedBlog()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity.IsAuthenticated)
+            {
+                updateBlog.UserId = userManager.GetUserId(user);
+
+                if (uploadedFile != null)
+                {
+                    var fileName = $"{Guid.NewGuid()}_{uploadedFile.Name}";
+                    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", fileName);
+
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await uploadedFile.OpenReadStream().CopyToAsync(stream);
+                    }
+
+                    newBlog.Image = fileName; // Save the file name to the database
+                }
+
+                await blogService.UpdateAsync(updateBlog, user);
+                await LoadBlogs(); // Reload the blogs list after update
+                updateBlog = null; // Clear selectedBlog after successful update
+                uploadedFile = null;
+                isUpdateMode = false; // Exit update mode
+            }
+            else
+            {
+                // Handle case where user is not authenticated (optional)
+                Console.WriteLine("User is not authenticated.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating blog: {ex.Message}");
+        }
+    }
+
+    async Task CreateBlog()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (uploadedFile != null)
+            {
+                var fileName = $"{Guid.NewGuid()}_{uploadedFile.Name}";
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images", fileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await uploadedFile.OpenReadStream().CopyToAsync(stream);
+                }
+
+                newBlog.Image = fileName; // Save the file name to the database
+            }
+
+
+            newBlog.UserId = currentUserId; // Assuming currentUserId is already set correctly
+
+            await blogService.AddAsync(newBlog, user);
+            await LoadBlogs();
+
+            // Reset the newBlog object after successful creation
+            newBlog = new Blog();
+            uploadedFile = null;
+        }
+        catch (Exception ex)
+        {
+            // Handle exception appropriately
+            Console.WriteLine($"Error creating blog: {ex.Message}");
+        }
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        uploadedFile = e.File;
+    }
+
+    private void CancelUpdate()
+    {
+        updateBlog = null; // Cancel update by clearing selectedBlog
+        uploadedFile = null;
+        isUpdateMode = false; // Exit update mode
+    }
+
+    // Validate the Blog object before submission
+    private bool IsValid(Blog blog)
+    {
+        if (string.IsNullOrWhiteSpace(blog.Header) || string.IsNullOrWhiteSpace(blog.Text))
+        {
+            // Perform additional validation if needed
+            return false;
+        }
+        return true;
+    }
+
 }
